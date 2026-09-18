@@ -12,12 +12,15 @@ in {
   # Nota: NÃO definir nixpkgs.config aqui — o test framework (runNixOSTest)
   # torna essa opção read-only. Quem usa o módulo define no seu config.
   # -------------------------------------------------------------------------
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  console.keyMap = "br-abnt2";
-  systemd.defaultUnit = "multi-user.target";
-  time.timeZone = "America/Fortaleza";
-  i18n.defaultLocale = "pt_BR.UTF-8";
+  # mkDefault: opções que um host real normalmente quer sobrescrever.
+  # Sem isso, importar o módulo junto com a config do host gera conflito
+  # de definições (ex.: networking.hostName).
+  boot.loader.systemd-boot.enable = lib.mkDefault true;
+  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
+  console.keyMap = lib.mkDefault "br-abnt2";
+  systemd.defaultUnit = lib.mkDefault "multi-user.target";
+  time.timeZone = lib.mkDefault "America/Fortaleza";
+  i18n.defaultLocale = lib.mkDefault "pt_BR.UTF-8";
 
   users.users.habbo = {
     isNormalUser = true;
@@ -26,12 +29,12 @@ in {
   };
 
   networking = {
-    hostName = "habbo";
+    hostName = lib.mkDefault "habbo";
     firewall.allowedTCPPorts = [ 80 443 3000 2096 3306 ];
-    useDHCP = true; # ajuste para IP fixo se necessário
+    useDHCP = lib.mkDefault true; # ajuste para IP fixo se necessário
   };
 
-  services.fail2ban.enable = true;
+  services.fail2ban.enable = lib.mkDefault true;
 
   # -------------------------------------------------------------------------
   # MySQL / MariaDB (banco do jogo + CMS)
@@ -148,5 +151,10 @@ in {
   # -------------------------------------------------------------------------
   systemd.tmpfiles.rules = [
     "L /var/www/habbo - - - - ${habboRoot}/cms"
+    # O serviço roda como usuário 'habbo' (grupo padrão 'users'). Se os
+    # arquivos do projeto pertencem a outro usuário do host, o boot do
+    # emulador falha ao escrever logs — normalize o diretório de log.
+    "d ${habboRoot}/arcturus/logging 0775 habbo users -"
+    "Z ${habboRoot}/arcturus/logging 0775 habbo users -"
   ];
 }
