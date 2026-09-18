@@ -4,17 +4,33 @@
 # num server novo, clone o repo e ajuste aqui.
 { config, pkgs, lib, ... }:
 let
-  habboRoot = "/home/gipsydanger/projects/habbo-dev";
+  cfg = config.services.habbo;
 in {
-  # -------------------------------------------------------------------------
-  # Base
-  # -------------------------------------------------------------------------
-  # Nota: NÃO definir nixpkgs.config aqui — o test framework (runNixOSTest)
-  # torna essa opção read-only. Quem usa o módulo define no seu config.
-  # -------------------------------------------------------------------------
-  # mkDefault: opções que um host real normalmente quer sobrescrever.
-  # Sem isso, importar o módulo junto com a config do host gera conflito
-  # de definições (ex.: networking.hostName).
+  options.services.habbo = {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Habilitar o stack Habbo retro completo (Arcturus + Atom CMS + Nitro).";
+    };
+    # Raiz do projeto habbo-dev (JAR, CMS, client). Clone o repo
+    # github:js-bruno/habbo-server-client e aponte para cá.
+    root = lib.mkOption {
+      type = lib.types.path;
+      default = "/home/gipsydanger/projects/habbo-dev";
+      description = "Caminho do clone do repo habbo-dev (código-fonte do hotel).";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    # -------------------------------------------------------------------------
+    # Base
+    # -------------------------------------------------------------------------
+    # Nota: NÃO definir nixpkgs.config aqui — o test framework (runNixOSTest)
+    # torna essa opção read-only. Quem usa o módulo define no seu config.
+    # -------------------------------------------------------------------------
+    # mkDefault: opções que um host real normalmente quer sobrescrever.
+    # Sem isso, importar o módulo junto com a config do host gera conflito
+    # de definições (ex.: networking.hostName).
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
   console.keyMap = lib.mkDefault "br-abnt2";
@@ -68,8 +84,8 @@ in {
     serviceConfig = {
       Type = "simple";
       User = "habbo";
-      WorkingDirectory = "${habboRoot}/arcturus";
-      ExecStart = "${pkgs.jdk17}/bin/java -jar ${habboRoot}/arcturus/Habbo-3.5.5-jar-with-dependencies.jar";
+      WorkingDirectory = "${cfg.root}/arcturus";
+      ExecStart = "${pkgs.jdk17}/bin/java -jar ${cfg.root}/arcturus/Habbo-3.5.5-jar-with-dependencies.jar";
       Restart = "on-failure";
       RestartSec = 10;
       TimeoutStartSec = 60;
@@ -87,8 +103,8 @@ in {
     serviceConfig = {
       Type = "oneshot";
       User = "habbo";
-      Environment = "HABBO_ROOT=${habboRoot}";
-      ExecStart = "${pkgs.bash}/bin/bash ${habboRoot}/../habbo-nixos/scripts/convert-furniture.sh";
+      Environment = "HABBO_ROOT=${cfg.root}";
+      ExecStart = "${pkgs.bash}/bin/bash ${../scripts/convert-furniture.sh}";
       TimeoutStartSec = 1800; # 7.7k móveis em máquina lenta passa de 15 min
     };
     wantedBy = [ "multi-user.target" ];
@@ -112,7 +128,7 @@ in {
       "listen.mode" = "0660";
     };
   };
-  # CMS vive em ${habboRoot}/cms → /var/www/habbo (symlink).
+  # CMS vive em ${cfg.root}/cms → /var/www/habbo (symlink).
   # ProtectHome=true (default) bloqueia a leitura de /home.
   systemd.services.phpfpm-habbo.serviceConfig.ProtectHome = lib.mkForce false;
 
@@ -130,7 +146,7 @@ in {
 
       # Client Nitro buildado — servido como /client/
       locations."/client/" = {
-        alias = "${habboRoot}/cms/public/client/";
+        alias = "${cfg.root}/cms/public/client/";
         tryFiles = "$uri $uri/ /client/index.html";
       };
 
@@ -167,11 +183,12 @@ in {
   # Symlink /var/www/habbo → projeto (criado no boot se ausente)
   # -------------------------------------------------------------------------
   systemd.tmpfiles.rules = [
-    "L /var/www/habbo - - - - ${habboRoot}/cms"
+    "L /var/www/habbo - - - - ${cfg.root}/cms"
     # O serviço roda como usuário 'habbo' (grupo padrão 'users'). Se os
     # arquivos do projeto pertencem a outro usuário do host, o boot do
     # emulador falha ao escrever logs — normalize o diretório de log.
-    "d ${habboRoot}/arcturus/logging 0775 habbo users -"
-    "Z ${habboRoot}/arcturus/logging 0775 habbo users -"
+    "d ${cfg.root}/arcturus/logging 0775 habbo users -"
+    "Z ${cfg.root}/arcturus/logging 0775 habbo users -"
   ];
+  };
 }
