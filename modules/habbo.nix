@@ -63,8 +63,8 @@ in {
   # -------------------------------------------------------------------------
   systemd.services.habbo-arcturus = {
     description = "Habbo Retro - Arcturus Morningstar 3.5.5 Emulator";
-    after = [ "mysql.service" "network.target" ];
-    wants = [ "mysql.service" ];
+    after = [ "mysql.service" "network.target" "habbo-asset-convert.service" ];
+    wants = [ "mysql.service" "habbo-asset-convert.service" ];
     serviceConfig = {
       Type = "simple";
       User = "habbo";
@@ -73,6 +73,23 @@ in {
       Restart = "on-failure";
       RestartSec = 10;
       TimeoutStartSec = 60;
+    };
+    wantedBy = [ "multi-user.target" ];
+  };
+
+  # Converte SWFs de mobília em .nitro para o client Nitro (one-shot, no boot).
+  # Idempotente: converte apenas se bundled/furniture estiver vazio.
+  # Requer node + nitro-converter/ buildado dentro do habboRoot (o script
+  # falha com mensagem clara se faltar — os móveis ficam como placeholder).
+  systemd.services.habbo-asset-convert = {
+    description = "Habbo Retro - convert furniture SWFs to .nitro assets";
+    after = [ "network.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "habbo";
+      Environment = "HABBO_ROOT=${habboRoot}";
+      ExecStart = "${pkgs.bash}/bin/bash ${habboRoot}/../habbo-nixos/scripts/convert-furniture.sh";
+      TimeoutStartSec = 1800; # 7.7k móveis em máquina lenta passa de 15 min
     };
     wantedBy = [ "multi-user.target" ];
   };
